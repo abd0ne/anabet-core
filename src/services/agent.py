@@ -34,7 +34,8 @@ model = ChatOllama(
 agent = create_agent(
     model=model,
     tools=[],
-    system_prompt=dynamic_prompt
+    middleware=[dynamic_prompt],  
+    context_schema=Context
 )
 
 
