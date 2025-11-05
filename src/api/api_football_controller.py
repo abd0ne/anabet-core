@@ -1,6 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
+
+from pydantic import BaseModel
+from src.services.agent import analyze_match
 from src.services.api_football_client import api_football_client, APIFootballException
+
+class LLMRequest(BaseModel):
+    team_a: str
+    team_b: str
 
 router = APIRouter(prefix="/api/football", tags=["api-football"])
 
@@ -190,3 +197,9 @@ async def get_rate_limiter_stats():
 async def get_cache_stats():
     """Récupère les statistiques du cache"""
     return api_football_client.get_cache_stats()
+
+@router.post("/analyze-match")
+async def analyze_match_llm(request: LLMRequest):
+    """Récupère l'analyse d'un match"""
+    return analyze_match(request.team_a, request.team_b)
+
