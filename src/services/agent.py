@@ -3,6 +3,9 @@ from langchain.agents import create_agent
 from dataclasses import dataclass
 from langchain.agents.middleware import dynamic_prompt, ModelRequest
 from langgraph.runtime import Runtime
+from typing import Optional
+import re
+import json
 
 @dataclass
 class Context:  
@@ -82,7 +85,47 @@ agent = create_agent(
 )
 
 
+def extract_json_from_markdown(content: str) -> Optional[dict]:
+    """Extrait le JSON d'un bloc de code markdown si présent"""
+    # Chercher un bloc de code JSON (```json ... ```)
+    json_pattern = r'```json\s*(.*?)\s*```'
+    match = re.search(json_pattern, content, re.DOTALL)
+    if match:
+        json_str = match.group(1).strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+    
+    # Si pas de bloc markdown, essayer de parser directement le contenu comme JSON
+    try:
+        return json.loads(content.strip())
+    except json.JSONDecodeError:
+        pass
+    
+    # Si aucun JSON valide, retourner None
+    return None
+
 def analyze_match(team_a: str, team_b: str):
     print(team_a, team_b)
     result = agent.invoke({"team_a": team_a, "team_b": team_b}, context={"team_a": team_a, "team_b": team_b})
+    
+    # Extraire le contenu du message
+    if isinstance(result, dict) and "messages" in result:
+        messages = result["messages"]
+        if messages and len(messages) > 0:
+            # Récupérer le contenu du dernier message (généralement la réponse de l'IA)
+            # messages[-1] est un objet AIMessage, pas un dict
+            last_message = messages[-1]
+            content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+            
+            # Essayer d'extraire le JSON du contenu
+            json_data = extract_json_from_markdown(content)
+            if json_data:
+                return json_data
+            
+            # Sinon, retourner le contenu brut
+            return content
+    
+    # Si la structure est différente, retourner le résultat tel quel
     return result
