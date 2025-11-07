@@ -34,11 +34,10 @@ def dynamic_prompt(request: ModelRequest) -> str:
 
     Exemple de réponse:
     {{
-        "resultat": "1-X-2", // Résultat probable (1-X-2)
-        "pourcentages": {{
-            "1": 50, // Probabilité de victoire pour l'équipe A
-            "X": 30, // Probabilité de match nul pour l'équipe A
-            "2": 20 // Probabilité de victoire pour l'équipe B
+        "oneXTwo": {{ // Résultat probable (1_X_2)
+            "one": 50, // Probabilité de victoire pour l'équipe A
+            "x": 30, // Probabilité de match nul pour l'équipe A
+            "two": 20 // Probabilité de victoire pour l'équipe B
         }},
         "xg_equipe_a": 1.5, // xG estimé pour l'équipe A
         "xg_equipe_b": 1.2, // xG estimé pour l'équipe B
