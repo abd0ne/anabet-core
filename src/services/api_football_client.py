@@ -269,7 +269,19 @@ class APIFootballClient:
             params['status'] = status
         
         response = await self._make_request('/fixtures', params, use_cache=True)
-        return response.get('response', [])
+        fixtures = response.get('response', [])
+        
+        # Filtrer pour ne garder que les matchs avec status.elapsed null (matchs non commencés)
+        filtered_fixtures = []
+        for fixture in fixtures:
+            # La structure de l'API retourne le fixture avec status au niveau racine
+            status = fixture.get('status', {})
+            elapsed = status.get('elapsed')
+            # Garder uniquement les matchs où elapsed est None (matchs non commencés)
+            if elapsed is None:
+                filtered_fixtures.append(fixture)
+        
+        return filtered_fixtures
     
     async def get_fixture_by_id(self, fixture_id: int) -> Optional[Dict[str, Any]]:
         """Récupère un match par son ID"""

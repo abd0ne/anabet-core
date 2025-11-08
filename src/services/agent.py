@@ -1,11 +1,56 @@
+import time
+from langchain.agents.structured_output import ToolStrategy
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from dataclasses import dataclass
 from langchain.agents.middleware import dynamic_prompt, ModelRequest
 from langgraph.runtime import Runtime
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict
 import re
 import json
+from langchain_tavily import TavilySearch
+
+# Classes pour la structure de réponse
+class OneXTwo(BaseModel):
+    equipe_a: float = Field(description="Probabilité de victoire pour l'équipe A")
+    equipe_x: float = Field(description="Probabilité de match nul")
+    equipe_b: float = Field(description="Probabilité de victoire pour l'équipe B")
+    justification: str = Field(description="Justification statistique complète")
+
+class TirsAttendus(BaseModel):
+    equipe_a: int = Field(description="Nombre de tirs attendus pour l'équipe A")
+    equipe_b: int = Field(description="Nombre de tirs attendus pour l'équipe B")
+
+class ProbabiliteCleanSheet(BaseModel):
+    equipe_a: float = Field(description="Probabilité de ne pas encaisser de but pour l'équipe A")
+    equipe_b: float = Field(description="Probabilité de ne pas encaisser de but pour l'équipe B")
+    justification: str = Field(description="Justification statistique complète")
+
+class PourcentagesPlusMoins25Buts(BaseModel):
+    plus: float = Field(description="Probabilité de plus de 2.5 buts")
+    moins: float = Field(description="Probabilité de moins de 2.5 buts")
+    justification: str = Field(description="Justification statistique complète")
+
+class InformationsInjuries(BaseModel):
+    nom: str = Field(description="Nom du joueur")
+    position: str = Field(description="Position du joueur")
+    etat: str = Field(description="État de la blessure")
+    impact: str = Field(description="Impact sur le match")
+
+class AnalyseMatchResponse(BaseModel):
+    oneXTwo: OneXTwo = Field(description="Résultat probable (1-X-2) avec pourcentages")
+    xg_equipe_a: float = Field(description="xG estimé pour l'équipe A")
+    xg_equipe_b: float = Field(description="xG estimé pour l'équipe B")
+    tirs_attendus: TirsAttendus = Field(description="Tirs attendus pour chaque équipe")
+    probabilite_clean_sheet: ProbabiliteCleanSheet = Field(description="Probabilité de clean sheet")
+    pourcentages_plus_moins_2_5_buts: PourcentagesPlusMoins25Buts = Field(
+        alias="pourcentages_plus_moins_2.5_buts",
+        description="Pourcentages plus/moins 2.5 buts"
+    )
+    informations_injuries: InformationsInjuries = Field(description="Informations sur les blessures importantes pour chaque équipe")
+    
+    model_config = ConfigDict(populate_by_name=True)
 
 @dataclass
 class Context:  
@@ -29,15 +74,17 @@ def dynamic_prompt(request: ModelRequest) -> str:
     4. Tirs attendus
     5. Probabilité de clean sheet
     6. Justification statistique complète
+    7. Blessures importantes pour chaque équipe
     
-    Format de réponse en JSON structuré.
+    Format de réponse en JSON structuré. Il faut absolument que le JSON soit valide et respectant la structure de l'exemple de réponse.
 
     Exemple de réponse:
     {{
         "oneXTwo": {{ // Résultat probable (1_X_2)
-            "one": 50, // Probabilité de victoire pour l'équipe A
-            "x": 30, // Probabilité de match nul pour l'équipe A
-            "two": 20 // Probabilité de victoire pour l'équipe B
+            "equipe_a": 50, // Probabilité de victoire pour l'équipe A
+            "equipe_x": 30, // Probabilité de match nul pour l'équipe A
+            "equipe_b": 20, // Probabilité de victoire pour l'équipe B
+            "justification": "La probabilité de victoire pour l'équipe A est de 50%, la probabilité de match nul est de 30% et la probabilité de victoire pour l'équipe B est de 20%." // Justification statistique complète
         }},
         "xg_equipe_a": 1.5, // xG estimé pour l'équipe A
         "xg_equipe_b": 1.2, // xG estimé pour l'équipe B
@@ -55,16 +102,20 @@ def dynamic_prompt(request: ModelRequest) -> str:
             "moins": 30, // Probabilité de moins de 2.5 buts
             "justification": "La probabilité de plus de 2.5 buts est de 50% et la probabilité de moins de 2.5 buts est de 30%." // Justification statistique complète
         }},
-        "injuries_equipe_a": {{
-            "joueur_1": "blessure",
-            "joueur_2": "blessure",
-            "joueur_3": "blessure"
+        "informations_injuries": {{
+            "equipe_a": [{{
+                "nom": "John Doe",
+                "position": "Milieu offensif",
+                "etat": "Blessé (tête, 4-6 semaines)",
+                "impact": "moyen - explication de l'impact sur le match"
+            }}],
+            "equipe_b": [{{
+                "nom": "John Doe",
+                "position": "Gardien de but",
+                "etat": "Blessé (tête, 1-6 mois)",
+                "impact": "moyen - explication de l'impact sur le match"
+            }}]
         }},
-        "injuries_equipe_b": {{
-            "joueur_1": "blessure",
-            "joueur_2": "blessure",
-            "joueur_3": "blessure"
-        }}
     }}
     """  
 
@@ -75,12 +126,20 @@ model = ChatOllama(
     base_url="http://localhost:11434"
 )
 
+# Initialize Tavily Search Tool
+tavily_search_tool = TavilySearch(
+    max_results=1,
+    topic="news",
+    time_range="day",
+)
+
 # Créer l'agent
 agent = create_agent(
     model=model,
-    tools=[],
+    tools=[tavily_search_tool],
     middleware=[dynamic_prompt],  
-    context_schema=Context
+    context_schema=Context,
+    response_format=AnalyseMatchResponse
 )
 
 
