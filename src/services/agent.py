@@ -63,6 +63,7 @@ def dynamic_prompt(request: ModelRequest) -> str:
     team_b = request.runtime.context.team_b
     return f"""
     Tu es un expert en analyse de matchs de football.
+    Analyse les dernières informations disponibles sur le prochain match ou match en cours entre les équipes {team_a} et {team_b}.
     
     ÉQUIPE A ({team_a}) - DOMICILE:
     ÉQUIPE B ({team_b}) - EXTÉRIEUR:
@@ -128,9 +129,7 @@ model = ChatOllama(
 
 # Initialize Tavily Search Tool
 tavily_search_tool = TavilySearch(
-    max_results=1,
-    topic="news",
-    time_range="day",
+    max_results=3
 )
 
 # Créer l'agent
