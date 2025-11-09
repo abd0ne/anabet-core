@@ -1,3 +1,4 @@
+import os
 import time
 from langchain.agents.structured_output import ToolStrategy
 from langchain_ollama import ChatOllama
@@ -56,14 +57,25 @@ class AnalyseMatchResponse(BaseModel):
 class Context:  
     team_a: str = "team_a"
     team_b: str = "team_b"
+    date: str = "date"
 
 @dynamic_prompt
 def dynamic_prompt(request: ModelRequest) -> str:  
     team_a = request.runtime.context.team_a
     team_b = request.runtime.context.team_b
+    date = request.runtime.context.date
+
     return f"""
     Tu es un expert en analyse de matchs de football.
-    Analyse les dernières informations disponibles sur le prochain match ou match en cours entre les équipes {team_a} et {team_b}.
+    Analyse les informations récentes disponibles sur le match du {date} entre les équipes {team_a} et {team_b}.
+    
+    INSTRUCTIONS CRITIQUES - À RESPECTER ABSOLUMENT:
+    1. LIMITE STRICTE: Utilise l'outil de recherche UNE FOIS maximum. Si tu n'obtiens pas d'informations utiles, procède quand même avec tes connaissances.
+    2. ARRÊT IMMÉDIAT: Dès que tu as fait une recherche (ou décidé de ne pas en faire), tu DOIS retourner ta réponse finale en JSON. Ne fais AUCUNE autre action.
+    3. FORMAT OBLIGATOIRE: Ta réponse DOIT être uniquement le JSON final, sans texte supplémentaire, sans autre utilisation d'outils.
+    4. STRUCTURE: Respecte exactement la structure JSON de l'exemple fourni.
+    
+    RÉSUMÉ: 1 recherche maximum → puis réponse JSON immédiate → FIN.
     
     ÉQUIPE A ({team_a}) - DOMICILE:
     ÉQUIPE B ({team_b}) - EXTÉRIEUR:
@@ -76,6 +88,8 @@ def dynamic_prompt(request: ModelRequest) -> str:
     5. Probabilité de clean sheet
     6. Justification statistique complète
     7. Blessures importantes pour chaque équipe
+    
+    IMPORTANT: Après avoir collecté les informations nécessaires avec les outils disponibles, tu dois IMMÉDIATEMENT retourner ta réponse finale en JSON. Ne continue pas à utiliser les outils une fois que tu as assez d'informations pour faire l'analyse.
     
     Format de réponse en JSON structuré. Il faut absolument que le JSON soit valide et respectant la structure de l'exemple de réponse.
 
@@ -129,7 +143,10 @@ model = ChatOllama(
 
 # Initialize Tavily Search Tool
 tavily_search_tool = TavilySearch(
-    max_results=3
+    max_results=1,
+    topics=["football", "sports", "news", "injuries", "statistics", "predictions", "odds", "bookmakers", "formations", "lineups", "injuries", "statistics", "predictions", "odds", "bookmakers", "formations", "lineups"],
+    api_key=os.getenv("TAVILY_API_KEY"),
+    api_url="https://api.tavily.com/v1/search",
 )
 
 # Créer l'agent
@@ -163,9 +180,21 @@ def extract_json_from_markdown(content: str) -> Optional[dict]:
     # Si aucun JSON valide, retourner None
     return None
 
-def analyze_match(team_a: str, team_b: str):
-    print(team_a, team_b)
-    result = agent.invoke({"team_a": team_a, "team_b": team_b}, context={"team_a": team_a, "team_b": team_b})
+def analyze_match(team_a: str, team_b: str, date: str):
+    print(team_a, team_b, date)
+    # Configuration avec limite de récursion augmentée et instructions strictes
+    config = {
+        "recursion_limit": 50,  # Pas de limite de récursion
+        "configurable": {
+            "thread_id": f"match_{team_a}_{team_b}_{date}"
+        }
+    }
+
+    result = agent.invoke(
+        {"team_a": team_a, "team_b": team_b, "date": date}, 
+        context={"team_a": team_a, "team_b": team_b, "date": date},
+        config=config
+    )
     
     # Extraire le contenu du message
     if isinstance(result, dict) and "messages" in result:

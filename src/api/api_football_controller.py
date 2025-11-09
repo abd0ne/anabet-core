@@ -8,6 +8,7 @@ from src.services.api_football_client import api_football_client, APIFootballExc
 class LLMRequest(BaseModel):
     team_a: str
     team_b: str
+    date: str
 
 router = APIRouter(prefix="/api/football", tags=["api-football"])
 
@@ -201,5 +202,5 @@ async def get_cache_stats():
 @router.post("/analyze-match")
 async def analyze_match_llm(request: LLMRequest):
     """Récupère l'analyse d'un match"""
-    return analyze_match(request.team_a, request.team_b)
+    return analyze_match(request.team_a, request.team_b, request.date)
 
