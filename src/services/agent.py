@@ -33,6 +33,15 @@ class PourcentagesPlusMoins25Buts(BaseModel):
     moins: float = Field(description="Probabilité de moins de 2.5 buts")
     justification: str = Field(description="Justification statistique complète")
 
+class ButeurEnVue(BaseModel):
+    nom: str = Field(description="Nom du joueur")
+    position: str = Field(description="Position du joueur")
+    nombre_de_buts: int = Field(description="Nombre de buts marqués par le joueur")
+
+class ButeursEnVue(BaseModel):
+    equipe_a: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe A")
+    equipe_b: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe B")
+
 class InformationsInjuries(BaseModel):
     nom: str = Field(description="Nom du joueur")
     position: str = Field(description="Position du joueur")
@@ -50,7 +59,7 @@ class AnalyseMatchResponse(BaseModel):
         description="Pourcentages plus/moins 2.5 buts"
     )
     informations_injuries: InformationsInjuries = Field(description="Informations sur les blessures importantes pour chaque équipe")
-    
+    buteurs_en_vue: ButeursEnVue = Field(description="Les buteurs les plus en vue pour chaque équipe")  
     model_config = ConfigDict(populate_by_name=True)
 
 @dataclass
@@ -86,8 +95,9 @@ def dynamic_prompt(request: ModelRequest) -> str:
     3. xG estimé pour chaque équipe
     4. Tirs attendus
     5. Probabilité de clean sheet
-    6. Justification statistique complète
-    7. Blessures importantes pour chaque équipe
+    6. Les buteurs les plus en vue pour chaque équipe
+    7. Justification statistique complète
+    8. Blessures importantes pour chaque équipe
     
     IMPORTANT: Après avoir collecté les informations nécessaires avec les outils disponibles, tu dois IMMÉDIATEMENT retourner ta réponse finale en JSON. Ne continue pas à utiliser les outils une fois que tu as assez d'informations pour faire l'analyse.
     
@@ -116,6 +126,18 @@ def dynamic_prompt(request: ModelRequest) -> str:
             "plus": 50, // Probabilité de plus de 2.5 buts
             "moins": 30, // Probabilité de moins de 2.5 buts
             "justification": "La probabilité de plus de 2.5 buts est de 50% et la probabilité de moins de 2.5 buts est de 30%." // Justification statistique complète
+        }},
+        "buteurs_en_vue": {{
+            "equipe_a": [{{
+                "nom": "John Doe",
+                "position": "Milieu offensif",
+                "nombre_de_buts": 10
+            }}],
+            "equipe_b": [{{
+                "nom": "John Doe",
+                "position": "Gardien de but",
+                "nombre_de_buts": 10
+            }}]
         }},
         "informations_injuries": {{
             "equipe_a": [{{
