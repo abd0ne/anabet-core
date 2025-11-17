@@ -42,11 +42,15 @@ class ButeursEnVue(BaseModel):
     equipe_a: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe A")
     equipe_b: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe B")
 
-class InformationsInjuries(BaseModel):
-    nom: str = Field(description="Nom du joueur")
-    position: str = Field(description="Position du joueur")
-    etat: str = Field(description="État de la blessure")
-    impact: str = Field(description="Impact sur le match")
+class InformationMissing(BaseModel):
+    nom: str = Field(description="Nom du joueur ou du joueur blessé ou suspendu")
+    position: str = Field(description="Position du joueur ou du joueur blessé ou suspendu")
+    etat: str = Field(description="État de la blessure ou de la suspension")
+    impact: str = Field(description="Impact sur le match - faible, moyen, fort")
+
+class InformationsMissing(BaseModel):
+    equipe_a: List[InformationMissing] = Field(description="Informations sur les blessures et suspensions pour l'équipe A")
+    equipe_b: List[InformationMissing] = Field(description="Informations sur les blessures et suspensions pour l'équipe B")
 
 class AnalyseMatchResponse(BaseModel):
     oneXTwo: OneXTwo = Field(description="Résultat probable (1-X-2) avec pourcentages")
@@ -58,7 +62,7 @@ class AnalyseMatchResponse(BaseModel):
         alias="pourcentages_plus_moins_2.5_buts",
         description="Pourcentages plus/moins 2.5 buts"
     )
-    informations_injuries: InformationsInjuries = Field(description="Informations sur les blessures importantes pour chaque équipe")
+    informations_missing: InformationsMissing = Field(description="Informations sur les blessures importantes et les suspensions pour chaque équipe")
     buteurs_en_vue: ButeursEnVue = Field(description="Les buteurs les plus en vue pour chaque équipe")  
     model_config = ConfigDict(populate_by_name=True)
 
@@ -78,13 +82,25 @@ def dynamic_prompt(request: ModelRequest) -> str:
     Tu es un expert en analyse de matchs de football.
     Analyse les informations récentes disponibles sur le match du {date} entre les équipes {team_a} et {team_b}.
     
-    INSTRUCTIONS CRITIQUES - À RESPECTER ABSOLUMENT:
-    1. LIMITE STRICTE: Utilise l'outil de recherche UNE FOIS maximum. Si tu n'obtiens pas d'informations utiles, procède quand même avec tes connaissances.
-    2. ARRÊT IMMÉDIAT: Dès que tu as fait une recherche (ou décidé de ne pas en faire), tu DOIS retourner ta réponse finale en JSON. Ne fais AUCUNE autre action.
-    3. FORMAT OBLIGATOIRE: Ta réponse DOIT être uniquement le JSON final, sans texte supplémentaire, sans autre utilisation d'outils.
-    4. STRUCTURE: Respecte exactement la structure JSON de l'exemple fourni.
+    IMPORTANT - BASE DE L'ANALYSE:
+    Toutes tes analyses DOIVENT se baser sur les effectifs actuels des équipes. Prends en compte:
+    - Les joueurs disponibles pour ce match spécifique
+    - Les blessures et suspensions actuelles
+    - Les compositions d'équipe récentes
+    - Les statistiques des joueurs présents dans l'effectif actuel
     
-    RÉSUMÉ: 1 recherche maximum → puis réponse JSON immédiate → FIN.
+    INSTRUCTIONS CRITIQUES - À RESPECTER STRICTEMENT:
+    1. RECHERCHE: Tu peux utiliser l'outil de recherche UNE SEULE FOIS si nécessaire. Si tu décides de ne pas l'utiliser, passe directement à l'analyse.
+    2. ARRÊT IMMÉDIAT: Dès que tu as fait ta recherche (ou décidé de ne pas en faire), tu DOIS IMMÉDIATEMENT générer et retourner ta réponse JSON. C'EST LA DERNIÈRE ACTION.
+    3. INTERDICTION ABSOLUE: Après avoir généré le JSON, tu NE DOIS PAS faire d'autres recherches, ne pas utiliser d'autres outils, ne pas modifier ta réponse. ARRÊTE-TOI.
+    4. FORMAT: Ta réponse DOIT être UNIQUEMENT un JSON valide et COMPLET. Le JSON DOIT commencer par {{ et se terminer par }}. Toutes les accolades DOIVENT être fermées.
+    5. STRUCTURE: Respecte EXACTEMENT la structure de l'exemple fourni avec toutes les clés requises. Vérifie que ton JSON est complet avant de le retourner.
+    
+    WORKFLOW OBLIGATOIRE (dans cet ordre):
+    Étape 1: Recherche (optionnelle, 1 fois max) OU passe directement à l'étape 2
+    Étape 2: Analyse des données
+    Étape 3: Génération du JSON final
+    Étape 4: ARRÊT IMMÉDIAT - Ne fais rien d'autre après
     
     ÉQUIPE A ({team_a}) - DOMICILE:
     ÉQUIPE B ({team_b}) - EXTÉRIEUR:
@@ -98,10 +114,6 @@ def dynamic_prompt(request: ModelRequest) -> str:
     6. Les buteurs les plus en vue pour chaque équipe
     7. Justification statistique complète
     8. Blessures importantes pour chaque équipe
-    
-    IMPORTANT: Après avoir collecté les informations nécessaires avec les outils disponibles, tu dois IMMÉDIATEMENT retourner ta réponse finale en JSON. Ne continue pas à utiliser les outils une fois que tu as assez d'informations pour faire l'analyse.
-    
-    Format de réponse en JSON structuré. Il faut absolument que le JSON soit valide et respectant la structure de l'exemple de réponse.
 
     Exemple de réponse:
     {{
@@ -139,15 +151,20 @@ def dynamic_prompt(request: ModelRequest) -> str:
                 "nombre_de_buts": 10
             }}]
         }},
-        "informations_injuries": {{
+        "informations_missing": {{
             "equipe_a": [{{
                 "nom": "John Doe",
                 "position": "Milieu offensif",
                 "etat": "Blessé (tête, 4-6 semaines)",
                 "impact": "moyen - explication de l'impact sur le match"
+            }},{{
+                "nom": "Jean Doe",
+                "position": "Défenseur",
+                "etat": "Suspension",
+                "impact": "fort - explication de l'impact sur le match"
             }}],
             "equipe_b": [{{
-                "nom": "John Doe",
+                "nom": "Robert Doe",
                 "position": "Gardien de but",
                 "etat": "Blessé (tête, 1-6 mois)",
                 "impact": "moyen - explication de l'impact sur le match"
@@ -159,13 +176,13 @@ def dynamic_prompt(request: ModelRequest) -> str:
 # Configuration du modèle
 model = ChatOllama(
     model="gpt-oss:20b",
-    temperature=0.5,
+    temperature=0.3,
     base_url="http://localhost:11434"
 )
 
 # Initialize Tavily Search Tool
 tavily_search_tool = TavilySearch(
-    max_results=1,
+    max_results=3,
     topics=["football", "sports", "news", "injuries", "statistics", "predictions", "odds", "bookmakers", "formations", "lineups", "injuries", "statistics", "predictions", "odds", "bookmakers", "formations", "lineups"],
     api_key=os.getenv("TAVILY_API_KEY"),
     api_url="https://api.tavily.com/v1/search",
@@ -181,6 +198,31 @@ agent = create_agent(
 )
 
 
+def fix_incomplete_json(json_str: str) -> str:
+    """Tente de réparer un JSON incomplet en ajoutant les accolades fermantes manquantes"""
+    json_str = json_str.strip()
+    
+    # Compter les accolades ouvertes et fermées
+    open_braces = json_str.count('{')
+    close_braces = json_str.count('}')
+    open_brackets = json_str.count('[')
+    close_brackets = json_str.count(']')
+    
+    # Ajouter les accolades/brackets fermantes manquantes
+    missing_braces = open_braces - close_braces
+    missing_brackets = open_brackets - close_brackets
+    
+    # Si le JSON ne se termine pas par } ou ], ajouter les fermetures manquantes
+    if not json_str.endswith('}') and not json_str.endswith(']'):
+        # Ajouter les brackets fermants d'abord (s'ils sont dans des tableaux)
+        if missing_brackets > 0:
+            json_str += ']' * missing_brackets
+        # Puis les accolades fermantes
+        if missing_braces > 0:
+            json_str += '}' * missing_braces
+    
+    return json_str
+
 def extract_json_from_markdown(content: str) -> Optional[dict]:
     """Extrait le JSON d'un bloc de code markdown si présent"""
     # Chercher un bloc de code JSON (```json ... ```)
@@ -191,22 +233,32 @@ def extract_json_from_markdown(content: str) -> Optional[dict]:
         try:
             return json.loads(json_str)
         except json.JSONDecodeError:
-            pass
+            # Essayer de réparer le JSON incomplet
+            try:
+                fixed_json = fix_incomplete_json(json_str)
+                return json.loads(fixed_json)
+            except (json.JSONDecodeError, Exception):
+                pass
     
     # Si pas de bloc markdown, essayer de parser directement le contenu comme JSON
     try:
         return json.loads(content.strip())
     except json.JSONDecodeError:
-        pass
+        # Essayer de réparer le JSON incomplet
+        try:
+            fixed_json = fix_incomplete_json(content.strip())
+            return json.loads(fixed_json)
+        except (json.JSONDecodeError, Exception):
+            pass
     
     # Si aucun JSON valide, retourner None
     return None
 
 def analyze_match(team_a: str, team_b: str, date: str):
     print(team_a, team_b, date)
-    # Configuration avec limite de récursion augmentée et instructions strictes
+    # Configuration avec limite de récursion optimisée pour éviter les boucles
     config = {
-        "recursion_limit": 50,  # Pas de limite de récursion
+        "recursion_limit": 20,  # Suffisant pour 1 recherche + analyse + réponse finale avec marge de sécurité  
         "configurable": {
             "thread_id": f"match_{team_a}_{team_b}_{date}"
         }
