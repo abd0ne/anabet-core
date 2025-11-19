@@ -37,6 +37,7 @@ class ButeurEnVue(BaseModel):
     nom: str = Field(description="Nom du joueur")
     position: str = Field(description="Position du joueur")
     nombre_de_buts: int = Field(description="Nombre de buts marqués par le joueur")
+    justification: str = Field(description="Justification statistique complète")
 
 class ButeursEnVue(BaseModel):
     equipe_a: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe A")
@@ -89,6 +90,26 @@ def dynamic_prompt(request: ModelRequest) -> str:
     - Les compositions d'équipe récentes
     - Les statistiques des joueurs présents dans l'effectif actuel
     
+    CRITÈRE SPÉCIFIQUE POUR "buteurs_en_vue" ET "informations_missing" - À RESPECTER ABSOLUMENT:
+    
+    POUR "buteurs_en_vue":
+    - Propose 5 buteurs pour chaque équipe
+    - EXCLUSION STRICTE: Exclus les joueurs qui ne font plus partie de l'effectif actuel de la saison en cours
+    - VÉRIFICATION OBLIGATOIRE: Avant d'inclure un joueur, vérifie qu'il fait partie de l'effectif actuel de la saison en cours
+    - EXCLUSION ABSOLUE: N'inclus AUCUN joueur qui:
+      * A été transféré ou prêté à une autre équipe
+      * A pris sa retraite
+      * N'est plus sous contrat avec l'équipe
+      * Faisait partie de l'effectif d'une saison précédente mais plus de la saison en cours
+    - STATISTIQUES: Utilise UNIQUEMENT les statistiques de buts de la saison en cours pour les joueurs de l'effectif actuel
+    
+    POUR "informations_missing":
+    - EXCLUSION STRICTE: Exclus les joueurs qui ne font plus partie de l'effectif actuel de la saison en cours
+    - VÉRIFICATION OBLIGATOIRE: Avant d'inclure un joueur blessé/suspendu, vérifie qu'il fait partie de l'effectif actuel de la saison en cours
+    - EXCLUSION ABSOLUE: N'inclus AUCUN joueur qui ne fait plus partie de l'effectif actuel, même s'il était blessé/suspendu dans le passé
+    
+    RÈGLE GÉNÉRALE: Si tu n'es pas certain qu'un joueur fait partie de l'effectif actuel de la saison en cours, NE L'INCLUS PAS. Mieux vaut une liste incomplète qu'une liste avec des joueurs qui ne font plus partie de l'équipe.
+    
     INSTRUCTIONS CRITIQUES - À RESPECTER STRICTEMENT:
     1. RECHERCHE: Tu peux utiliser l'outil de recherche UNE SEULE FOIS si nécessaire. Si tu décides de ne pas l'utiliser, passe directement à l'analyse.
     2. ARRÊT IMMÉDIAT: Dès que tu as fait ta recherche (ou décidé de ne pas en faire), tu DOIS IMMÉDIATEMENT générer et retourner ta réponse JSON. C'EST LA DERNIÈRE ACTION.
@@ -97,7 +118,7 @@ def dynamic_prompt(request: ModelRequest) -> str:
     5. STRUCTURE: Respecte EXACTEMENT la structure de l'exemple fourni avec toutes les clés requises. Vérifie que ton JSON est complet avant de le retourner.
     
     WORKFLOW OBLIGATOIRE (dans cet ordre):
-    Étape 1: Recherche (optionnelle, 1 fois max) OU passe directement à l'étape 2
+    Étape 1: Recherche (optionnelle, 3 fois max) OU passe directement à l'étape 2
     Étape 2: Analyse des données
     Étape 3: Génération du JSON final
     Étape 4: ARRÊT IMMÉDIAT - Ne fais rien d'autre après
@@ -143,12 +164,14 @@ def dynamic_prompt(request: ModelRequest) -> str:
             "equipe_a": [{{
                 "nom": "John Doe",
                 "position": "Milieu offensif",
-                "nombre_de_buts": 10
+                "nombre_de_buts": 10,
+                "justification": "John Doe est le meilleur buteur de l'équipe A"
             }}],
             "equipe_b": [{{
                 "nom": "John Doe",
                 "position": "Gardien de but",
-                "nombre_de_buts": 10
+                "nombre_de_buts": 10,
+                "justification": "John Doe est le meilleur buteur de l'équipe B"
             }}]
         }},
         "informations_missing": {{
