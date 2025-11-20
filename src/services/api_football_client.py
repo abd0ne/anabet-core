@@ -455,6 +455,49 @@ class APIFootballClient:
         predictions = response.get('response', [])
         return predictions[0] if predictions else None
     
+    # ==================== INJURIES ====================
+
+    async def get_injuries(
+        self,
+        fixture_id: Optional[int] = None,
+        league_id: Optional[int] = None,
+        season: Optional[int] = None,
+        team_id: Optional[int] = None,
+        player_id: Optional[int] = None,
+        date: Optional[str] = None,
+        timezone: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Récupère la liste des joueurs blessés
+        
+        Args:
+            fixture_id: ID du match
+            league_id: ID de la ligue
+            season: Saison
+            team_id: ID de l'équipe
+            player_id: ID du joueur
+            date: Date (YYYY-MM-DD)
+            timezone: Timezone
+        """
+        params = {}
+        if fixture_id:
+            params['fixture'] = fixture_id
+        if league_id:
+            params['league'] = league_id
+        if season:
+            params['season'] = season
+        if team_id:
+            params['team'] = team_id
+        if player_id:
+            params['player'] = player_id
+        if date:
+            params['date'] = date
+        if timezone:
+            params['timezone'] = timezone
+            
+        response = await self._make_request('/injuries', params)
+        return response.get('response', [])
+
     # ==================== UTILITY METHODS ====================
     
     async def get_last_n_matches_home(

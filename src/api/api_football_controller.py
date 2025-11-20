@@ -177,6 +177,32 @@ async def get_top_assists(
     except APIFootballException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/injuries")
+async def get_injuries(
+    fixture_id: Optional[int] = Query(None, description="ID du match"),
+    league_id: Optional[int] = Query(None, description="ID de la ligue"),
+    season: Optional[int] = Query(None, description="Saison"),
+    team_id: Optional[int] = Query(None, description="ID de l'équipe"),
+    player_id: Optional[int] = Query(None, description="ID du joueur"),
+    date: Optional[str] = Query(None, description="Date (YYYY-MM-DD)"),
+    timezone: Optional[str] = Query(None, description="Timezone")
+):
+    """Récupère la liste des joueurs blessés"""
+    try:
+        async with api_football_client as client:
+            injuries = await client.get_injuries(
+                fixture_id=fixture_id,
+                league_id=league_id,
+                season=season,
+                team_id=team_id,
+                player_id=player_id,
+                date=date,
+                timezone=timezone
+            )
+            return {"success": True, "count": len(injuries), "data": injuries}
+    except APIFootballException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/predictions/{fixture_id}")
 async def get_predictions(fixture_id: int):
     """Récupère les prédictions de l'API pour un match"""

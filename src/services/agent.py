@@ -33,21 +33,11 @@ class PourcentagesPlusMoins25Buts(BaseModel):
     moins: float = Field(description="Probabilité de moins de 2.5 buts")
     justification: str = Field(description="Justification statistique complète")
 
-class ButeurEnVue(BaseModel):
-    nom: str = Field(description="Nom du joueur")
-    position: str = Field(description="Position du joueur")
-    nombre_de_buts: int = Field(description="Nombre de buts marqués par le joueur")
-    justification: str = Field(description="Justification statistique complète")
-
-class ButeursEnVue(BaseModel):
-    equipe_a: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe A")
-    equipe_b: List[ButeurEnVue] = Field(description="Les buteurs les plus en vue pour l'équipe B")
-
 class InformationMissing(BaseModel):
     nom: str = Field(description="Nom du joueur ou du joueur blessé ou suspendu")
     position: str = Field(description="Position du joueur ou du joueur blessé ou suspendu")
     etat: str = Field(description="État de la blessure ou de la suspension")
-    impact: str = Field(description="Impact sur le match - faible, moyen, fort")
+    impact: str = Field(description="Impact sur le match - faible, moyen, fort")    
 
 class InformationsMissing(BaseModel):
     equipe_a: List[InformationMissing] = Field(description="Informations sur les blessures et suspensions pour l'équipe A")
@@ -64,7 +54,6 @@ class AnalyseMatchResponse(BaseModel):
         description="Pourcentages plus/moins 2.5 buts"
     )
     informations_missing: InformationsMissing = Field(description="Informations sur les blessures importantes et les suspensions pour chaque équipe")
-    buteurs_en_vue: ButeursEnVue = Field(description="Les buteurs les plus en vue pour chaque équipe")  
     model_config = ConfigDict(populate_by_name=True)
 
 @dataclass
@@ -84,44 +73,29 @@ def dynamic_prompt(request: ModelRequest) -> str:
     Analyse les informations récentes disponibles sur le match du {date} entre les équipes {team_a} et {team_b}.
     
     IMPORTANT - BASE DE L'ANALYSE:
-    Toutes tes analyses DOIVENT se baser sur les effectifs actuels des équipes. Prends en compte:
+    Toutes tes analyses DOIVENT se baser UNIQUEMENT sur la saison en 2025/2026 et sur les effectifs actuels des équipes. Prends en compte:
     - Les joueurs disponibles pour ce match spécifique
     - Les blessures et suspensions actuelles
     - Les compositions d'équipe récentes
     - Les statistiques des joueurs présents dans l'effectif actuel
     
-    CRITÈRE SPÉCIFIQUE POUR "buteurs_en_vue" ET "informations_missing" - À RESPECTER ABSOLUMENT:
-    
-    POUR "buteurs_en_vue":
-    - Propose 5 buteurs pour chaque équipe
-    - EXCLUSION STRICTE: Exclus les joueurs qui ne font plus partie de l'effectif actuel de la saison en cours
-    - VÉRIFICATION OBLIGATOIRE: Avant d'inclure un joueur, vérifie qu'il fait partie de l'effectif actuel de la saison en cours
-    - EXCLUSION ABSOLUE: N'inclus AUCUN joueur qui:
-      * A été transféré ou prêté à une autre équipe
-      * A pris sa retraite
-      * N'est plus sous contrat avec l'équipe
-      * Faisait partie de l'effectif d'une saison précédente mais plus de la saison en cours
-    - STATISTIQUES: Utilise UNIQUEMENT les statistiques de buts de la saison en cours pour les joueurs de l'effectif actuel
-    
-    POUR "informations_missing":
-    - EXCLUSION STRICTE: Exclus les joueurs qui ne font plus partie de l'effectif actuel de la saison en cours
+    CRITÈRE SPÉCIFIQUE POUR "informations_missing" - À RESPECTER ABSOLUMENT:
+    - INCLUSION STRICTE: N'inclus QUE les joueurs qui font ACTUELLEMENT partie de l'effectif de la saison en cours de chaque équipe
     - VÉRIFICATION OBLIGATOIRE: Avant d'inclure un joueur blessé/suspendu, vérifie qu'il fait partie de l'effectif actuel de la saison en cours
     - EXCLUSION ABSOLUE: N'inclus AUCUN joueur qui ne fait plus partie de l'effectif actuel, même s'il était blessé/suspendu dans le passé
     
     RÈGLE GÉNÉRALE: Si tu n'es pas certain qu'un joueur fait partie de l'effectif actuel de la saison en cours, NE L'INCLUS PAS. Mieux vaut une liste incomplète qu'une liste avec des joueurs qui ne font plus partie de l'équipe.
     
     INSTRUCTIONS CRITIQUES - À RESPECTER STRICTEMENT:
-    1. RECHERCHE: Tu peux utiliser l'outil de recherche UNE SEULE FOIS si nécessaire. Si tu décides de ne pas l'utiliser, passe directement à l'analyse.
-    2. ARRÊT IMMÉDIAT: Dès que tu as fait ta recherche (ou décidé de ne pas en faire), tu DOIS IMMÉDIATEMENT générer et retourner ta réponse JSON. C'EST LA DERNIÈRE ACTION.
-    3. INTERDICTION ABSOLUE: Après avoir généré le JSON, tu NE DOIS PAS faire d'autres recherches, ne pas utiliser d'autres outils, ne pas modifier ta réponse. ARRÊTE-TOI.
-    4. FORMAT: Ta réponse DOIT être UNIQUEMENT un JSON valide et COMPLET. Le JSON DOIT commencer par {{ et se terminer par }}. Toutes les accolades DOIVENT être fermées.
-    5. STRUCTURE: Respecte EXACTEMENT la structure de l'exemple fourni avec toutes les clés requises. Vérifie que ton JSON est complet avant de le retourner.
+    1. RECHERCHE UNIQUE: Utilise l'outil de recherche UNE SEULE FOIS pour TOUTES les informations (équipe A, équipe B, match). Ne fais PAS de recherches multiples.
+    2. ARRÊT IMMÉDIAT: Dès que tu as fait CETTE recherche, tu DOIS IMMÉDIATEMENT générer et retourner ta réponse JSON.
+    3. INTERDICTION ABSOLUE: Ne fais JAMAIS plus d'une recherche. Ne vérifie pas tes résultats avec une autre recherche.
+    4. FORMAT: Ta réponse DOIT être UNIQUEMENT un JSON valide et COMPLET.
+    5. RESPECT STRICT DE L'EXEMPLE: Ton JSON DOIT avoir EXACTEMENT les mêmes clés et la même structure que l'exemple ci-dessous. Aucune clé ne doit manquer.
     
-    WORKFLOW OBLIGATOIRE (dans cet ordre):
-    Étape 1: Recherche (optionnelle, 3 fois max) OU passe directement à l'étape 2
-    Étape 2: Analyse des données
-    Étape 3: Génération du JSON final
-    Étape 4: ARRÊT IMMÉDIAT - Ne fais rien d'autre après
+    WORKFLOW OBLIGATOIRE (2 étapes seulement):
+    Étape 1: Recherche sur internet UNIQUE pour les deux équipes
+    Étape 2: Génération du JSON final (conforme à l'exemple) et ARRÊT IMMÉDIAT
     
     ÉQUIPE A ({team_a}) - DOMICILE:
     ÉQUIPE B ({team_b}) - EXTÉRIEUR:
@@ -132,9 +106,8 @@ def dynamic_prompt(request: ModelRequest) -> str:
     3. xG estimé pour chaque équipe
     4. Tirs attendus
     5. Probabilité de clean sheet
-    6. Les buteurs les plus en vue pour chaque équipe
-    7. Justification statistique complète
-    8. Blessures importantes pour chaque équipe
+    6. Justification statistique complète
+    7. Blessures importantes pour chaque équipe
 
     Exemple de réponse:
     {{
@@ -159,20 +132,6 @@ def dynamic_prompt(request: ModelRequest) -> str:
             "plus": 50, // Probabilité de plus de 2.5 buts
             "moins": 30, // Probabilité de moins de 2.5 buts
             "justification": "La probabilité de plus de 2.5 buts est de 50% et la probabilité de moins de 2.5 buts est de 30%." // Justification statistique complète
-        }},
-        "buteurs_en_vue": {{
-            "equipe_a": [{{
-                "nom": "John Doe",
-                "position": "Milieu offensif",
-                "nombre_de_buts": 10,
-                "justification": "John Doe est le meilleur buteur de l'équipe A"
-            }}],
-            "equipe_b": [{{
-                "nom": "John Doe",
-                "position": "Gardien de but",
-                "nombre_de_buts": 10,
-                "justification": "John Doe est le meilleur buteur de l'équipe B"
-            }}]
         }},
         "informations_missing": {{
             "equipe_a": [{{
@@ -205,7 +164,7 @@ model = ChatOllama(
 
 # Initialize Tavily Search Tool
 tavily_search_tool = TavilySearch(
-    max_results=3,
+    max_results=1,
     topics=["football", "sports", "news", "injuries", "statistics", "predictions", "odds", "bookmakers", "formations", "lineups", "injuries", "statistics", "predictions", "odds", "bookmakers", "formations", "lineups"],
     api_key=os.getenv("TAVILY_API_KEY"),
     api_url="https://api.tavily.com/v1/search",
@@ -249,7 +208,7 @@ def fix_incomplete_json(json_str: str) -> str:
 def extract_json_from_markdown(content: str) -> Optional[dict]:
     """Extrait le JSON d'un bloc de code markdown si présent"""
     # Chercher un bloc de code JSON (```json ... ```)
-    json_pattern = r'```json\s*(.*?)\s*```'
+    json_pattern = r'```(?:json)?\s*(.*?)\s*```'
     match = re.search(json_pattern, content, re.DOTALL)
     if match:
         json_str = match.group(1).strip()
@@ -264,24 +223,32 @@ def extract_json_from_markdown(content: str) -> Optional[dict]:
                 pass
     
     # Si pas de bloc markdown, essayer de parser directement le contenu comme JSON
+    # ou chercher le premier { et le dernier }
     try:
+        # Chercher le premier { et le dernier }
+        start_idx = content.find('{')
+        end_idx = content.rfind('}')
+        
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            json_content = content[start_idx:end_idx+1]
+            try:
+                return json.loads(json_content)
+            except json.JSONDecodeError:
+                fixed_json = fix_incomplete_json(json_content)
+                return json.loads(fixed_json)
+                
         return json.loads(content.strip())
-    except json.JSONDecodeError:
-        # Essayer de réparer le JSON incomplet
-        try:
-            fixed_json = fix_incomplete_json(content.strip())
-            return json.loads(fixed_json)
-        except (json.JSONDecodeError, Exception):
-            pass
+    except (json.JSONDecodeError, Exception):
+        pass
     
     # Si aucun JSON valide, retourner None
     return None
 
 def analyze_match(team_a: str, team_b: str, date: str):
     print(team_a, team_b, date)
-    # Configuration avec limite de récursion optimisée pour éviter les boucles
+    # Configuration avec limite de récursion augmentée pour sécurité
     config = {
-        "recursion_limit": 20,  # Suffisant pour 1 recherche + analyse + réponse finale avec marge de sécurité  
+        "recursion_limit": 30,
         "configurable": {
             "thread_id": f"match_{team_a}_{team_b}_{date}"
         }
@@ -303,10 +270,12 @@ def analyze_match(team_a: str, team_b: str, date: str):
             content = last_message.content if hasattr(last_message, 'content') else str(last_message)
             
             # Essayer d'extraire le JSON du contenu
+            print(f"Contenu brut de la réponse: {content}")
             json_data = extract_json_from_markdown(content)
             if json_data:
                 return json_data
             
+            print("Impossible d'extraire un JSON valide du contenu.")
             # Sinon, retourner le contenu brut
             return content
     
