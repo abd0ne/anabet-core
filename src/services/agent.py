@@ -6,7 +6,7 @@ from langchain.agents import create_agent
 from dataclasses import dataclass
 from langchain.agents.middleware import dynamic_prompt, ModelRequest
 from langgraph.runtime import Runtime
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 import re
 import json
@@ -33,16 +33,6 @@ class PourcentagesPlusMoins25Buts(BaseModel):
     moins: float = Field(description="Probabilité de moins de 2.5 buts")
     justification: str = Field(description="Justification statistique complète")
 
-class InformationMissing(BaseModel):
-    nom: str = Field(description="Nom du joueur ou du joueur blessé ou suspendu")
-    position: str = Field(description="Position du joueur ou du joueur blessé ou suspendu")
-    etat: str = Field(description="État de la blessure ou de la suspension")
-    impact: str = Field(description="Impact sur le match - faible, moyen, fort")    
-
-class InformationsMissing(BaseModel):
-    equipe_a: List[InformationMissing] = Field(description="Informations sur les blessures et suspensions pour l'équipe A")
-    equipe_b: List[InformationMissing] = Field(description="Informations sur les blessures et suspensions pour l'équipe B")
-
 class AnalyseMatchResponse(BaseModel):
     oneXTwo: OneXTwo = Field(description="Résultat probable (1-X-2) avec pourcentages")
     xg_equipe_a: float = Field(description="xG estimé pour l'équipe A")
@@ -53,7 +43,6 @@ class AnalyseMatchResponse(BaseModel):
         alias="pourcentages_plus_moins_2.5_buts",
         description="Pourcentages plus/moins 2.5 buts"
     )
-    informations_missing: InformationsMissing = Field(description="Informations sur les blessures importantes et les suspensions pour chaque équipe")
     model_config = ConfigDict(populate_by_name=True)
 
 @dataclass
@@ -79,13 +68,6 @@ def dynamic_prompt(request: ModelRequest) -> str:
     - Les compositions d'équipe récentes
     - Les statistiques des joueurs présents dans l'effectif actuel
     
-    CRITÈRE SPÉCIFIQUE POUR "informations_missing" - À RESPECTER ABSOLUMENT:
-    - INCLUSION STRICTE: N'inclus QUE les joueurs qui font ACTUELLEMENT partie de l'effectif de la saison en cours de chaque équipe
-    - VÉRIFICATION OBLIGATOIRE: Avant d'inclure un joueur blessé/suspendu, vérifie qu'il fait partie de l'effectif actuel de la saison en cours
-    - EXCLUSION ABSOLUE: N'inclus AUCUN joueur qui ne fait plus partie de l'effectif actuel, même s'il était blessé/suspendu dans le passé
-    
-    RÈGLE GÉNÉRALE: Si tu n'es pas certain qu'un joueur fait partie de l'effectif actuel de la saison en cours, NE L'INCLUS PAS. Mieux vaut une liste incomplète qu'une liste avec des joueurs qui ne font plus partie de l'équipe.
-    
     INSTRUCTIONS CRITIQUES - À RESPECTER STRICTEMENT:
     1. RECHERCHE UNIQUE: Utilise l'outil de recherche UNE SEULE FOIS pour TOUTES les informations (équipe A, équipe B, match). Ne fais PAS de recherches multiples.
     2. ARRÊT IMMÉDIAT: Dès que tu as fait CETTE recherche, tu DOIS IMMÉDIATEMENT générer et retourner ta réponse JSON.
@@ -107,7 +89,6 @@ def dynamic_prompt(request: ModelRequest) -> str:
     4. Tirs attendus
     5. Probabilité de clean sheet
     6. Justification statistique complète
-    7. Blessures importantes pour chaque équipe
 
     Exemple de réponse:
     {{
@@ -132,26 +113,7 @@ def dynamic_prompt(request: ModelRequest) -> str:
             "plus": 50, // Probabilité de plus de 2.5 buts
             "moins": 30, // Probabilité de moins de 2.5 buts
             "justification": "La probabilité de plus de 2.5 buts est de 50% et la probabilité de moins de 2.5 buts est de 30%." // Justification statistique complète
-        }},
-        "informations_missing": {{
-            "equipe_a": [{{
-                "nom": "John Doe",
-                "position": "Milieu offensif",
-                "etat": "Blessé (tête, 4-6 semaines)",
-                "impact": "moyen - explication de l'impact sur le match"
-            }},{{
-                "nom": "Jean Doe",
-                "position": "Défenseur",
-                "etat": "Suspension",
-                "impact": "fort - explication de l'impact sur le match"
-            }}],
-            "equipe_b": [{{
-                "nom": "Robert Doe",
-                "position": "Gardien de but",
-                "etat": "Blessé (tête, 1-6 mois)",
-                "impact": "moyen - explication de l'impact sur le match"
-            }}]
-        }},
+        }}
     }}
     """  
 
