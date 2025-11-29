@@ -85,13 +85,26 @@ class APIFootballClient:
                 url = f"{self.base_url}{endpoint}"
                 logger.info(f"Making request to {url} with params {params} (attempt {attempt + 1})")
                 
+                # Créer le client s'il n'existe pas
                 if not self.client:
                     self.client = httpx.AsyncClient(
                         timeout=self.settings.api_football_timeout,
                         headers=self.headers
                     )
                 
-                response = await self.client.get(url, params=params)
+                try:
+                    response = await self.client.get(url, params=params)
+                except RuntimeError as e:
+                    # Si le client a été fermé, le recréer
+                    if "closed" in str(e).lower():
+                        logger.warning("Client was closed, recreating it...")
+                        self.client = httpx.AsyncClient(
+                            timeout=self.settings.api_football_timeout,
+                            headers=self.headers
+                        )
+                        response = await self.client.get(url, params=params)
+                    else:
+                        raise
                 
                 # Vérifier le statut
                 if response.status_code == 200:
@@ -158,7 +171,10 @@ class APIFootballClient:
             params['season'] = season
         
         response = await self._make_request('/leagues', params)
-        return response.get('response', [])
+        leagues = response.get('response', [])
+        print(f"API Response for /leagues with params {params}: {response}")
+        print(f"Extracted leagues count: {len(leagues)}")
+        return leagues
     
     # ==================== TEAMS ====================
     

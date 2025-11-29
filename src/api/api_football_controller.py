@@ -21,7 +21,9 @@ async def get_leagues(
     try:
         async with api_football_client as client:
             leagues = await client.get_leagues(country=country, season=season)
-            return {"success": True, "count": len(leagues), "data": leagues}
+            response = {"success": True, "count": len(leagues), "data": leagues}
+            print(f"Response from /leagues?season={season}: {response}")
+            return response
     except APIFootballException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
